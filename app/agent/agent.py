@@ -28,18 +28,14 @@ def is_jira_request(user_input: str) -> bool:
 # EXTRACT JIRA DETAILS (SAFE PARSER)
 # ======================================================
 def extract_jira_details(jira_response: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Handles multiple response formats safely
-    """
 
     if not jira_response:
         return {"issue_id": None, "issue_url": None}
 
-    # direct format
     issue_id = jira_response.get("issue_id")
     issue_url = jira_response.get("issue_url") or jira_response.get("url")
 
-    # nested format (your earlier logs)
+    # handle nested response
     if not issue_id and "reply" in jira_response:
         reply = jira_response["reply"]
         issue_id = reply.get("issue_id")
@@ -55,9 +51,6 @@ def extract_jira_details(jira_response: Dict[str, Any]) -> Dict[str, Any]:
 # MAIN AGENT (MCP CORE LOGIC)
 # ======================================================
 def run_agent(user_input: str) -> str:
-    """
-    MCP Routing Logic
-    """
 
     if not user_input or not user_input.strip():
         return "Please enter a valid message."
@@ -66,7 +59,7 @@ def run_agent(user_input: str) -> str:
         text = user_input.strip()
 
         # ======================================================
-        # JIRA FLOW
+        # JIRA FLOW (FIXED)
         # ======================================================
         if is_jira_request(text):
             logger.info("Routing to Jira Agent")
@@ -78,8 +71,17 @@ def run_agent(user_input: str) -> str:
 
             logger.info(f"Jira Response: {jira_response}")
 
-            if not jira_response or not jira_response.get("success"):
-                raise Exception(f"Invalid Jira response: {jira_response}")
+            # ✅ Handle empty response
+            if not jira_response:
+                return "❌ Jira service is unavailable. Try later."
+
+            # ✅ Handle string response (THIS FIXES YOUR ERROR)
+            if isinstance(jira_response, str):
+                return jira_response
+
+            # ✅ Handle dict safely
+            if not jira_response.get("success"):
+                return "❌ Failed to create Jira ticket."
 
             jira_data = extract_jira_details(jira_response)
 
@@ -106,10 +108,10 @@ def run_agent(user_input: str) -> str:
         banking_reply = get_ai_response(text)
 
         if not banking_reply:
-            return "No response from Banking AI."
+            return "❌ No response from Banking AI."
 
         return banking_reply
 
     except Exception as e:
         logger.exception("Agent error")
-        return f"Something went wrong. Please try again."
+        return "❌ Something went wrong. Please try again."

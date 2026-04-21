@@ -58,7 +58,7 @@ def get_ai_response(message: str) -> str:
             logger.info(f"Calling Banking API (attempt {attempt+1})")
 
             response = requests.post(
-                f"{BANKING_API_URL}/query",
+                f"{BANKING_API_URL}/chat",
                 json=payload,
                 headers=headers,
                 timeout=BANKING_TIMEOUT
