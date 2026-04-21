@@ -1,13 +1,13 @@
 import os
 import logging
-from typing import Optional, Union
+from typing import Optional
 
-from app.services.banking_service import process_query
+import requests
 
-# ======================================================
-# ENV CONFIG
-# ======================================================
+BANKING_API_URL = os.getenv("BANKING_API_URL")
+BANKING_TIMEOUT = int(os.getenv("BANKING_TIMEOUT", "60"))
 ENABLE_BANKING = os.getenv("ENABLE_BANKING", "true").lower() == "true"
+BANKING_API_KEY = os.getenv("BANKING_API_KEY")
 
 logger = logging.getLogger(__name__)
 
@@ -16,64 +16,75 @@ class BankingClientError(Exception):
     pass
 
 
-# ======================================================
-# MAIN FUNCTION
-# ======================================================
 def get_ai_response(message: str) -> str:
-    """
-    MCP Smart Banking Client (INTERNAL CALL - PRODUCTION SAFE)
-    """
-
-    # ======================================================
-    # FEATURE FLAG CHECK
-    # ======================================================
     if not ENABLE_BANKING:
-        logger.warning("Banking service is disabled via config")
-        return "⚠️ Banking service is currently disabled."
+        return "⚠️ Banking service is disabled."
 
-    # ======================================================
-    # INPUT VALIDATION
-    # ======================================================
+    if not BANKING_API_URL:
+        logger.error("BANKING_API_URL not configured")
+        return "Banking service is not configured."
+
     if not message or not message.strip():
         return "Please enter a valid message."
 
-    try:
-        clean_msg = message.strip()
+    payload = {
+        "question": message.strip()
+    }
 
-        logger.info(f"Calling Banking Service (internal) | Query: {clean_msg}")
+    headers = {
+        "Content-Type": "application/json"
+    }
 
-        # ======================================================
-        # DIRECT FUNCTION CALL (NO HTTP)
-        # ======================================================
-        result: Union[str, dict, None] = process_query(clean_msg)
+    if BANKING_API_KEY:
+        headers["x-api-key"] = BANKING_API_KEY
 
-        # ======================================================
-        # RESPONSE HANDLING
-        # ======================================================
-        if not result:
-            logger.warning("Empty response from banking_service")
-            return "No response from Banking AI."
+    for attempt in range(2):
+        response = None
+        try:
+            logger.info("Calling Banking API (attempt %s)", attempt + 1)
 
-        # If service returns string
-        if isinstance(result, str):
-            return result
+            response = requests.post(
+                f"{BANKING_API_URL}/chat",
+                json=payload,
+                headers=headers,
+                timeout=BANKING_TIMEOUT
+            )
 
-        # If service returns dict
-        if isinstance(result, dict):
-            reply: Optional[str] = result.get("reply") or result.get("response")
+            response.raise_for_status()
+            data = response.json()
 
-            if reply:
-                return reply
+            if isinstance(data, str):
+                return data
 
-            logger.warning(f"Unexpected dict format: {result}")
+            if not isinstance(data, dict):
+                logger.warning("Unexpected response type: %s", type(data))
+                return "Invalid response from Banking AI."
+
+            reply: Optional[str] = data.get("reply")
+
+            if not reply:
+                logger.warning("Empty reply from Banking AI: %s", data)
+                return "No response from Banking AI."
+
+            return reply
+
+        except requests.exceptions.Timeout:
+            logger.warning("Banking API timeout (attempt %s)", attempt + 1)
+
+        except requests.exceptions.ConnectionError as e:
+            logger.error("Connection error: %s", e)
+
+        except requests.exceptions.HTTPError as e:
+            body = response.text if response is not None else ""
+            logger.error("HTTP error: %s | Response: %s", e, body)
+            return f"Banking AI error: {body}"
+
+        except ValueError as e:
+            logger.error("Invalid JSON response: %s", e)
             return "Invalid response from Banking AI."
 
-        # Unexpected type
-        logger.warning(f"Unsupported response type: {type(result)}")
-        return "Unexpected response from Banking AI."
+        except Exception as e:
+            logger.exception("Unexpected error calling Banking API")
+            return f"Banking AI error: {str(e)}"
 
-    except Exception as e:
-        logger.exception("Banking service error")
-
-        # Do NOT expose raw error in production
-        return "❌ Banking service is temporarily unavailable. Please try again."
+    return "Banking AI service is unavailable. Please try later."
