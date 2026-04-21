@@ -1,19 +1,11 @@
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from app.services.banking_client import get_ai_response
 from app.services.jira_client import create_jira_ticket
-from fastapi import APIRouter
-from app.agent.router import route_query
-
-router = APIRouter()
-
 
 logger = logging.getLogger(__name__)
 
-@router.post("/query")
-def query(data: dict):
-    return route_query(data.get("query"))
 
 # ======================================================
 # INTENT DETECTION (PRODUCTION SAFE)
@@ -33,11 +25,34 @@ def is_jira_request(user_input: str) -> bool:
 
 
 # ======================================================
-# EXTRACT JIRA DETAILS (UPDATED)
+# EXTRACT JIRA DETAILS (SAFE PARSER)
 # ======================================================
+def extract_jira_details(jira_response: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Handles multiple response formats safely
+    """
+
+    if not jira_response:
+        return {"issue_id": None, "issue_url": None}
+
+    # direct format
+    issue_id = jira_response.get("issue_id")
+    issue_url = jira_response.get("issue_url") or jira_response.get("url")
+
+    # nested format (your earlier logs)
+    if not issue_id and "reply" in jira_response:
+        reply = jira_response["reply"]
+        issue_id = reply.get("issue_id")
+        issue_url = reply.get("issue_url")
+
+    return {
+        "issue_id": issue_id,
+        "issue_url": issue_url
+    }
+
 
 # ======================================================
-# MAIN AGENT (PRODUCTION)
+# MAIN AGENT (MCP CORE LOGIC)
 # ======================================================
 def run_agent(user_input: str) -> str:
     """
@@ -71,9 +86,6 @@ def run_agent(user_input: str) -> str:
             issue_id = jira_data["issue_id"]
             issue_url = jira_data["issue_url"]
 
-            # ======================================================
-            # ✅ FINAL RESPONSE (AS YOU REQUESTED)
-            # ======================================================
             if issue_url:
                 return (
                     f"✅ Jira Ticket Created Successfully\n\n"
@@ -81,7 +93,6 @@ def run_agent(user_input: str) -> str:
                     f"🔗 Open Ticket: {issue_url}"
                 )
 
-            # fallback if URL missing
             return (
                 f"✅ Jira Ticket Created Successfully\n\n"
                 f"🆔 Ticket No: {issue_id}"
@@ -99,6 +110,6 @@ def run_agent(user_input: str) -> str:
 
         return banking_reply
 
-    except Exception:
+    except Exception as e:
         logger.exception("Agent error")
-        return "Something went wrong. Please try again."
+        return f"Something went wrong. Please try again."
