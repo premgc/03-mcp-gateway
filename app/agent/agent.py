@@ -3,9 +3,17 @@ from typing import Dict, Any, Optional
 
 from app.services.banking_client import get_ai_response
 from app.services.jira_client import create_jira_ticket
+from fastapi import APIRouter
+from app.agent.router import route_query
+
+router = APIRouter()
+
 
 logger = logging.getLogger(__name__)
 
+@router.post("/query")
+def query(data: dict):
+    return route_query(data.get("query"))
 
 # ======================================================
 # INTENT DETECTION (PRODUCTION SAFE)
