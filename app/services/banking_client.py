@@ -1,7 +1,5 @@
 import os
 import logging
-from typing import Optional
-
 import requests
 
 BANKING_API_URL = os.getenv("BANKING_API_URL")
@@ -21,7 +19,7 @@ def get_ai_response(message: str) -> str:
 
     try:
         response = requests.post(
-            BANKING_API_URL,   # ✅ IMPORTANT → NO /chat
+            f"{BANKING_API_URL}/chat",   # ✅ FIX
             json={"question": message.strip()},
             timeout=BANKING_TIMEOUT
         )
