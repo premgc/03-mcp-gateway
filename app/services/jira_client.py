@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 # CONFIG
 # ======================================================
 JIRA_AGENT_BASE_URL = os.getenv("JIRA_AGENT_URL", "").strip().rstrip("/")
-JIRA_TIMEOUT = int(os.getenv("JIRA_TIMEOUT", "20"))
+JIRA_TIMEOUT = int(os.getenv("JIRA_TIMEOUT", "90"))
 ENABLE_JIRA = os.getenv("ENABLE_JIRA", "true").lower() == "true"
 
 if JIRA_AGENT_BASE_URL:
